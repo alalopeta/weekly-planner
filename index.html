@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Моя неделя</title>
+  <style>
+    :root{
+      --bg:#f5f3ef; --card:#ffffff; --text:#242424; --muted:#777;
+      --line:#dedbd5; --accent:#242424; --soft:#ece9e3;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      background:var(--bg); color:var(--text);
+    }
+    .app{max-width:1500px;margin:auto;padding:22px}
+    header{
+      display:flex;gap:14px;align-items:center;justify-content:space-between;
+      margin-bottom:18px;flex-wrap:wrap
+    }
+    h1{font-size:28px;margin:0}
+    .controls{display:flex;gap:8px;flex-wrap:wrap}
+    button,select,input,textarea{
+      font:inherit;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--text)
+    }
+    button{padding:9px 13px;cursor:pointer}
+    button.primary{background:var(--accent);color:white;border-color:var(--accent)}
+    button:hover{filter:brightness(.97)}
+    .week-label{color:var(--muted);font-size:14px;margin-top:4px}
+    .filters{
+      display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:15px
+    }
+    .filters select{padding:9px 12px;min-width:190px}
+    .board{
+      display:grid;grid-template-columns:repeat(7,minmax(185px,1fr));gap:10px;
+      overflow-x:auto;padding-bottom:8px
+    }
+    .day{
+      background:rgba(255,255,255,.55);border:1px solid var(--line);
+      border-radius:14px;min-height:490px;padding:10px
+    }
+    .day.today{outline:2px solid #242424}
+    .day-head{
+      display:flex;justify-content:space-between;align-items:center;padding:3px 2px 10px
+    }
+    .day-name{font-weight:700}
+    .day-date{font-size:12px;color:var(--muted)}
+    .add-mini{padding:4px 8px;border-radius:8px}
+    .tasks{display:flex;flex-direction:column;gap:8px}
+    .task{
+      background:var(--card);border:1px solid var(--line);border-radius:11px;padding:10px;
+      box-shadow:0 1px 2px rgba(0,0,0,.04);cursor:grab
+    }
+    .task.done{opacity:.52}
+    .task.done .task-title{text-decoration:line-through}
+    .task-top{display:flex;justify-content:space-between;gap:8px}
+    .task-title{font-weight:650;font-size:14px;line-height:1.3}
+    .task-time{font-size:12px;color:var(--muted);white-space:nowrap}
+    .tag{
+      display:inline-flex;margin-top:8px;padding:3px 7px;border-radius:999px;
+      font-size:11px;background:var(--soft)
+    }
+    .task-actions{display:flex;gap:5px;margin-top:9px}
+    .task-actions button{padding:4px 7px;font-size:12px}
+    dialog{
+      border:none;border-radius:16px;padding:0;max-width:470px;width:calc(100% - 32px);
+      box-shadow:0 20px 80px rgba(0,0,0,.25)
+    }
+    dialog::backdrop{background:rgba(0,0,0,.35)}
+    form{padding:20px}
+    form h2{margin:0 0 16px}
+    label{display:block;font-size:13px;font-weight:650;margin:12px 0 6px}
+    input,select,textarea{width:100%;padding:10px}
+    textarea{min-height:75px;resize:vertical}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+    .empty{font-size:12px;color:#999;text-align:center;padding:20px 5px}
+    footer{margin-top:14px;color:var(--muted);font-size:12px}
+    @media(max-width:900px){.board{grid-template-columns:repeat(7,260px)}}
+  </style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div>
+      <h1>Моя неделя</h1>
+      <div class="week-label" id="weekLabel"></div>
+    </div>
+    <div class="controls">
+      <button id="prevWeek">← Назад</button>
+      <button id="todayBtn">Сегодня</button>
+      <button id="nextWeek">Вперёд →</button>
+      <button class="primary" id="addTask">+ Добавить дело</button>
+    </div>
+  </header>
+
+  <div class="filters">
+    <select id="categoryFilter">
+      <option value="">Все категории</option>
+    </select>
+    <select id="statusFilter">
+      <option value="">Все задачи</option>
+      <option value="active">Только активные</option>
+      <option value="done">Только выполненные</option>
+    </select>
+    <button id="exportBtn">Экспорт</button>
+    <button id="importBtn">Импорт</button>
+    <input type="file" id="importFile" accept=".json" hidden />
+  </div>
+
+  <main class="board" id="board"></main>
+  <footer>Данные сохраняются локально в этом браузере. Для синхронизации между устройствами используй экспорт и импорт.</footer>
+</div>
+
+<dialog id="taskDialog">
+  <form method="dialog" id="taskForm">
+    <h2 id="dialogTitle">Новое дело</h2>
+    <input type="hidden" id="taskId" />
+
+    <label for="title">Что нужно сделать?</label>
+    <input id="title" required placeholder="Например: сделать страницу портфолио" />
+
+    <div class="row">
+      <div>
+        <label for="date">Дата</label>
+        <input id="date" type="date" required />
+      </div>
+      <div>
+        <label for="time">Время</label>
+        <input id="time" type="time" />
+      </div>
+    </div>
+
+    <label for="category">Категория</label>
+    <select id="category"></select>
+
+    <label for="notes">Заметка</label>
+    <textarea id="notes" placeholder="Дополнительные детали"></textarea>
+
+    <div class="modal-actions">
+      <button value="cancel">Отмена</button>
+      <button type="submit" value="default" class="primary">Сохранить</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+const categories = [
+  "Работа", "Учёба", "Немецкий", "TestDaF", "Дизайн", "Портфолио",
+  "Behance", "ArchiCAD", "Midjourney / AI", "Поиск работы", "Резюме",
+  "Документы", "Sozialamt / ведомства", "Финансы", "Оплаты", "Дом",
+  "Уборка", "Покупки", "Готовка", "Здоровье", "Спорт", "Зал", "Бег",
+  "Врач", "Уход за собой", "Семья", "Друзья", "Встречи", "Звонки",
+  "Личное", "Хобби", "Отдых", "Поездки", "Идеи", "Прочее"
+];
+
+const storeKey = "weeklyPlannerTasksV1";
+let tasks = JSON.parse(localStorage.getItem(storeKey) || "[]");
+let monday = getMonday(new Date());
+
+const board = document.getElementById("board");
+const dialog = document.getElementById("taskDialog");
+const form = document.getElementById("taskForm");
+
+function pad(n){ return String(n).padStart(2,"0"); }
+function isoLocal(d){ return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+function parseLocal(s){ const [y,m,d]=s.split("-").map(Number); return new Date(y,m-1,d); }
+function getMonday(date){
+  const d = new Date(date); d.setHours(0,0,0,0);
+  const day = d.getDay() || 7;
+  d.setDate(d.getDate() - day + 1);
+  return d;
+}
+function addDays(date,n){ const d=new Date(date); d.setDate(d.getDate()+n); return d; }
+function save(){ localStorage.setItem(storeKey, JSON.stringify(tasks)); render(); }
+function esc(s=""){ return s.replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m])); }
+
+function initCategories(){
+  const cat = document.getElementById("category");
+  const filter = document.getElementById("categoryFilter");
+  categories.forEach(c=>{
+    cat.insertAdjacentHTML("beforeend",`<option>${esc(c)}</option>`);
+    filter.insertAdjacentHTML("beforeend",`<option>${esc(c)}</option>`);
+  });
+}
+function render(){
+  board.innerHTML="";
+  const names=["Понедельник","Вторник","Среда","Четверг","Пятница","Суббота","Воскресенье"];
+  const today=isoLocal(new Date());
+  const categoryFilter=document.getElementById("categoryFilter").value;
+  const statusFilter=document.getElementById("statusFilter").value;
+
+  const sunday=addDays(monday,6);
+  document.getElementById("weekLabel").textContent =
+    `${monday.toLocaleDateString("ru-RU",{day:"numeric",month:"long"})} — ${sunday.toLocaleDateString("ru-RU",{day:"numeric",month:"long",year:"numeric"})}`;
+
+  for(let i=0;i<7;i++){
+    const date=addDays(monday,i), iso=isoLocal(date);
+    let dayTasks=tasks.filter(t=>t.date===iso);
+    if(categoryFilter) dayTasks=dayTasks.filter(t=>t.category===categoryFilter);
+    if(statusFilter==="active") dayTasks=dayTasks.filter(t=>!t.done);
+    if(statusFilter==="done") dayTasks=dayTasks.filter(t=>t.done);
+    dayTasks.sort((a,b)=>(a.time||"99:99").localeCompare(b.time||"99:99"));
+
+    const section=document.createElement("section");
+    section.className="day"+(iso===today?" today":"");
+    section.dataset.date=iso;
+    section.innerHTML=`
+      <div class="day-head">
+        <div><div class="day-name">${names[i]}</div>
+        <div class="day-date">${date.toLocaleDateString("ru-RU",{day:"2-digit",month:"2-digit"})}</div></div>
+        <button class="add-mini" data-add="${iso}">+</button>
+      </div>
+      <div class="tasks">
+        ${dayTasks.length ? dayTasks.map(taskHTML).join("") : '<div class="empty">Нет дел</div>'}
+      </div>`;
+    section.addEventListener("dragover",e=>e.preventDefault());
+    section.addEventListener("drop",e=>{
+      e.preventDefault();
+      const id=e.dataTransfer.getData("text/plain");
+      const task=tasks.find(t=>t.id===id);
+      if(task){task.date=iso;save();}
+    });
+    board.appendChild(section);
+  }
+  bindTaskEvents();
+}
+function taskHTML(t){
+  return `<article class="task ${t.done?"done":""}" draggable="true" data-id="${t.id}">
+    <div class="task-top">
+      <div class="task-title">${esc(t.title)}</div>
+      <div class="task-time">${esc(t.time||"")}</div>
+    </div>
+    <span class="tag">${esc(t.category)}</span>
+    ${t.notes?`<div style="font-size:12px;color:#777;margin-top:7px">${esc(t.notes)}</div>`:""}
+    <div class="task-actions">
+      <button data-done="${t.id}">${t.done?"Вернуть":"Готово"}</button>
+      <button data-edit="${t.id}">Изменить</button>
+      <button data-delete="${t.id}">Удалить</button>
+    </div>
+  </article>`;
+}
+function bindTaskEvents(){
+  document.querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>openDialog(null,b.dataset.add));
+  document.querySelectorAll(".task").forEach(el=>{
+    el.addEventListener("dragstart",e=>e.dataTransfer.setData("text/plain",el.dataset.id));
+  });
+  document.querySelectorAll("[data-done]").forEach(b=>b.onclick=()=>{
+    const t=tasks.find(x=>x.id===b.dataset.done); if(t){t.done=!t.done;save();}
+  });
+  document.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>{
+    const t=tasks.find(x=>x.id===b.dataset.edit); if(t)openDialog(t);
+  });
+  document.querySelectorAll("[data-delete]").forEach(b=>b.onclick=()=>{
+    if(confirm("Удалить это дело?")){tasks=tasks.filter(x=>x.id!==b.dataset.delete);save();}
+  });
+}
+function openDialog(task=null,date=null){
+  document.getElementById("dialogTitle").textContent=task?"Изменить дело":"Новое дело";
+  document.getElementById("taskId").value=task?.id||"";
+  document.getElementById("title").value=task?.title||"";
+  document.getElementById("date").value=task?.date||date||isoLocal(new Date());
+  document.getElementById("time").value=task?.time||"";
+  document.getElementById("category").value=task?.category||categories[0];
+  document.getElementById("notes").value=task?.notes||"";
+  dialog.showModal();
+}
+form.addEventListener("submit",e=>{
+  e.preventDefault();
+  const id=document.getElementById("taskId").value;
+  const item={
+    id:id||crypto.randomUUID(),
+    title:document.getElementById("title").value.trim(),
+    date:document.getElementById("date").value,
+    time:document.getElementById("time").value,
+    category:document.getElementById("category").value,
+    notes:document.getElementById("notes").value.trim(),
+    done:id?(tasks.find(t=>t.id===id)?.done||false):false
+  };
+  if(!item.title)return;
+  if(id) tasks=tasks.map(t=>t.id===id?item:t); else tasks.push(item);
+  dialog.close(); save();
+});
+
+document.getElementById("addTask").onclick=()=>openDialog();
+document.getElementById("prevWeek").onclick=()=>{monday=addDays(monday,-7);render();};
+document.getElementById("nextWeek").onclick=()=>{monday=addDays(monday,7);render();};
+document.getElementById("todayBtn").onclick=()=>{monday=getMonday(new Date());render();};
+document.getElementById("categoryFilter").onchange=render;
+document.getElementById("statusFilter").onchange=render;
+
+document.getElementById("exportBtn").onclick=()=>{
+  const blob=new Blob([JSON.stringify(tasks,null,2)],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download="weekly-planner-backup.json"; a.click(); URL.revokeObjectURL(a.href);
+};
+document.getElementById("importBtn").onclick=()=>document.getElementById("importFile").click();
+document.getElementById("importFile").onchange=async e=>{
+  const file=e.target.files[0]; if(!file)return;
+  try{
+    const data=JSON.parse(await file.text());
+    if(!Array.isArray(data))throw new Error();
+    tasks=data;save();alert("Данные импортированы.");
+  }catch{alert("Не удалось прочитать файл.");}
+  e.target.value="";
+};
+
+initCategories();
+render();
+</script>
+</body>
+</html>
